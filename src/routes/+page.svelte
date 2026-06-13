@@ -27,47 +27,6 @@
 	});
 </script>
 
-<!-- Navigation -->
-<nav
-	class="fixed top-0 left-0 right-0 z-30 transition-all duration-200"
-	class:border-b={scrolled}
-	class:bg-background={scrolled}
-	class:backdrop-blur-md={scrolled}
->
-	<div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-		<a href="/" class="flex items-center gap-2 font-semibold">
-			<div
-				class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
-			>
-				<BookOpen class="size-4" />
-			</div>
-			LexiGap
-		</a>
-		<div class="hidden items-center gap-8 md:flex">
-			<a
-				href="#features"
-				class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-			>
-				Features
-			</a>
-			<a
-				href="#how-it-works"
-				class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-			>
-				How it works
-			</a>
-		</div>
-		<div class="flex items-center gap-3">
-			<a href="/login">
-				<Button variant="ghost" size="sm">Log in</Button>
-			</a>
-			<a href="/register">
-				<Button size="sm">Get Started</Button>
-			</a>
-		</div>
-	</div>
-</nav>
-
 <!-- Hero Section -->
 <section class="relative flex min-h-screen flex-col items-center justify-center px-6 pt-24">
 	<div class="mx-auto max-w-3xl text-center">
