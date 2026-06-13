@@ -1,0 +1,198 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Better Auth Models ───────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  name          String?
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  sessions       Session[]
+  accounts       Account[]
+  learningPaths  LearningPath[]
+  quizResults    QuizResult[]
+  lessonProgress LessonProgress[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ─── Application Models ───────────────────────────────────────
+
+model Sentence {
+  id         String   @id @default(cuid())
+  text       String // The full sentence
+  source     String // Source of the sentence (e.g., "grade-8-corpus", "news")
+  difficulty Float // Flesch-Kincaid readability score
+  createdAt  DateTime @default(now())
+
+  questions QuizQuestion[]
+
+  @@map("sentence")
+}
+
+model QuizQuestion {
+  id           String   @id @default(cuid())
+  sentenceId   String
+  sentence     Sentence @relation(fields: [sentenceId], references: [id], onDelete: Cascade)
+  blankWord    String // The word that was blanked out
+  posTag       String // Part of speech tag: "Verb", "Noun", "Preposition", "Adjective", "Adverb", "Conjunction", "Article", "Pronoun"
+  options      String[] // Array of 4 distractor options including the correct one
+  correctIndex Int // Index of the correct answer in options array
+  difficulty   String   @default("medium") // "easy", "medium", "hard"
+  type         String   @default("cloze") // "cloze" or "synonym"
+  usageCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  results QuizResultItem[]
+
+  @@map("quiz_question")
+}
+
+model QuizResult {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score          Float // Percentage score (0-100)
+  totalQuestions Int      @default(20)
+  correctAnswers Int      @default(0)
+  completedAt    DateTime @default(now())
+  timeSpent      Int? // Time spent in seconds
+
+  items QuizResultItem[]
+
+  @@map("quiz_result")
+}
+
+model QuizResultItem {
+  id            String       @id @default(cuid())
+  quizResultId  String
+  quizResult    QuizResult   @relation(fields: [quizResultId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedIndex Int // Index the user selected
+  isCorrect     Boolean
+  createdAt     DateTime     @default(now())
+
+  @@map("quiz_result_item")
+}
+
+model GrammarMetric {
+  id             String   @id @default(cuid())
+  userId         String
+  quizResultId   String
+  posTag         String // Part of speech tag
+  totalQuestions Int      @default(0)
+  correctAnswers Int      @default(0)
+  score          Float    @default(0) // Percentage (0-100)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, quizResultId, posTag])
+  @@map("grammar_metric")
+}
+
+model Lesson {
+  id               String @id @default(cuid())
+  title            String
+  description      String
+  moduleTag        String // The POS tag this lesson targets: "Verb", "Preposition", etc.
+  content          String // Rich lesson content (markdown)
+  difficulty       String @default("medium")
+  orderIndex       Int // Display order within a module
+  estimatedMinutes Int    @default(5)
+
+  learningPaths LearningPath[]
+  progress      LessonProgress[]
+
+  @@map("lesson")
+}
+
+model LearningPath {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId   String
+  lesson     Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  status     String   @default("locked") // "locked", "unlocked", "in-progress", "completed"
+  orderIndex Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+  @@map("learning_path")
+}
+
+model LessonProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completed   Boolean   @default(false)
+  score       Float? // Score on the lesson's final quiz if applicable
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, lessonId])
+  @@map("lesson_progress")
+}
