@@ -46,11 +46,24 @@
 			Algorithmic Assessment
 		</Badge>
 
+		<!-- <MediaBetweenText
+			firstText="Master"
+			secondText="Grammar"
+			mediaUrl="Your"
+			mediaType="text"
+			triggerType="hover"
+			class="mb-6 gap-2 font-sans text-5xl font-bold text-foreground sm:text-6xl md:text-7xl lg:text-8xl"
+			mediaContainerClass="overflow-hidden"
+			leftTextClass="text-foreground"
+			rightTextClass="text-foreground"
+		/> -->
+
 		<h1
 			class="mb-6 font-sans text-5xl font-bold leading-[1.1] tracking-tight text-foreground sm:text-6xl md:text-7xl lg:text-8xl"
 		>
 			Master Grammar.<br />
 			One
+
 			<span class="relative inline-block">
 				<TextHighlighter
 					as="span"

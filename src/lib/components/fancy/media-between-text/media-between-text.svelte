@@ -16,7 +16,7 @@
 		firstText: string;
 		secondText: string;
 		mediaUrl: string;
-		mediaType: 'image' | 'video';
+		mediaType: 'image' | 'video' | 'text';
 		mediaContainerClass?: string;
 		fallbackUrl?: string;
 		as?: ElementType;
@@ -148,12 +148,14 @@
 			>
 				<source src={mediaUrl} type="video/mp4" />
 			</video>
-		{:else}
+		{:else if mediaType === 'image'}
 			<img
 				src={mediaUrl}
 				alt={alt || `${firstText} ${secondText}`}
 				class="h-full w-full object-cover"
 			/>
+		{:else if mediaType === 'text'}
+			<span class=" h-full whitespace-nowrap">{mediaUrl}</span>
 		{/if}
 	</motion.div>
 
