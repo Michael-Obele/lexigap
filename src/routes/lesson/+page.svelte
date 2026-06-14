@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
+	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -11,8 +13,10 @@
 		BreadcrumbPage,
 		BreadcrumbSeparator
 	} from '$lib/components/ui/breadcrumb/index.js';
+	if (browser) {
+		toast.info('Lessons are not ready yet — coming soon!', { duration: 5000 });
+	}
 	import {
-		BrainCircuit,
 		Lightbulb,
 		AlertTriangle,
 		CheckCircle2,
@@ -145,7 +149,7 @@
 					<!-- Interactive Exercise -->
 					<Card.Root class="rounded-xl border-2 border-border/50 p-6">
 						<div class="mb-4 flex items-center gap-2">
-							<BrainCircuit class="size-5 text-primary" />
+							<Lightbulb class="size-5 text-primary" />
 							<h3 class="text-lg font-semibold">Interactive Exercise</h3>
 						</div>
 

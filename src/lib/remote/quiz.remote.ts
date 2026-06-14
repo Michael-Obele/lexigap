@@ -1,3 +1,5 @@
+import { error } from '@sveltejs/kit';
+import { form, query } from '$app/server';
 import { generateQuiz, calculateMetrics, calculateScore } from '$lib/algorithms/generator';
 import type { GeneratedQuestion } from '$lib/types/quiz';
 import * as v from 'valibot';
@@ -11,68 +13,44 @@ const QuizAnswerSchema = v.object({
 
 export type QuizAnswerData = v.InferInput<typeof QuizAnswerSchema>;
 
+const QuizQuestionSchema = v.object({
+	usedWords: v.array(v.string())
+});
+
 /**
- * Fetch a freshly generated quiz (query flavor).
- * Used by the load function to generate 20 questions on the fly.
+ * Fetch a single quiz question so the assessment page can render immediately.
+ * Each call requests only one question and avoids blocking on the full quiz.
  */
-export async function getQuizData(count: number = 20): Promise<{
-	questions: GeneratedQuestion[];
-}> {
-	const questions = await generateQuiz(count);
-	return { questions };
-}
+export const getQuizQuestion = query(QuizQuestionSchema, async ({ usedWords }) => {
+	for (let attempt = 0; attempt < 15; attempt++) {
+		const questions = await generateQuiz(1);
+		const question = questions[0];
+		if (!question) continue;
+		if (usedWords.includes(question.blankWord)) continue;
+		return question;
+	}
+
+	error(503, 'Datamuse could not produce a new quiz question');
+});
+
+const QuizSubmitSchema = v.object({
+	questions: v.string(),
+	answers: v.array(v.number())
+});
 
 /**
  * Score a completed quiz (form flavor).
  * Validates answers, computes metrics, returns results.
  */
-export async function submitQuiz(data: FormData): Promise<{
-	score: number;
-	correctAnswers: number;
-	totalQuestions: number;
-	metrics: Array<{
-		posTag: string;
-		label: string;
-		totalQuestions: number;
-		correctAnswers: number;
-		score: number;
-	}>;
-	error?: string;
-}> {
-	const raw = v.parse(QuizAnswerSchema, {
-		answers: data.getAll('answers').map(Number)
-	});
-
-	if (!raw.answers || raw.answers.length === 0) {
-		return {
-			score: 0,
-			correctAnswers: 0,
-			totalQuestions: 0,
-			metrics: [],
-			error: 'No answers provided'
-		};
-	}
-
-	// We need the original questions to score — they'll be passed via a hidden field or session
-	const questionsJson = data.get('questions') as string;
-	if (!questionsJson) {
-		return {
-			score: 0,
-			correctAnswers: 0,
-			totalQuestions: 0,
-			metrics: [],
-			error: 'Questions data missing'
-		};
-	}
-
-	const questions: GeneratedQuestion[] = JSON.parse(questionsJson);
-	const score = calculateScore(questions, raw.answers);
-	const correctAnswers = questions.filter((q, i) => raw.answers[i] === q.correctIndex).length;
+export const submitQuiz = form(QuizSubmitSchema, async ({ questions, answers }) => {
+	const parsedQuestions: GeneratedQuestion[] = JSON.parse(questions);
+	const score = calculateScore(parsedQuestions, answers);
+	const correctAnswers = parsedQuestions.filter((q, i) => answers[i] === q.correctIndex).length;
 
 	return {
 		score,
 		correctAnswers,
-		totalQuestions: questions.length,
-		metrics: calculateMetrics(questions, raw.answers)
+		totalQuestions: parsedQuestions.length,
+		metrics: calculateMetrics(parsedQuestions, answers)
 	};
-}
+});

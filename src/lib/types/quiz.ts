@@ -2,14 +2,29 @@
  * Types for the quiz generation system
  */
 
+export type QuestionType =
+	| 'synonym'
+	| 'antonym'
+	| 'association'
+	| 'means-like'
+	| 'phrase'
+	| 'cloze'
+	| 'homophone'
+	| 'adjective-noun';
+
 export interface GeneratedQuestion {
 	sentence: string;
 	blankWord: string;
 	posTag: string;
 	options: string[];
 	correctIndex: number;
-	type: 'cloze' | 'synonym';
+	type: QuestionType;
 	difficulty: string;
+	/** Optional metadata enriched from Datamuse */
+	definition?: string;
+	pronunciation?: string;
+	syllables?: number;
+	frequency?: number; // occurrences per million
 }
 
 export interface QuizResult {
@@ -63,7 +78,8 @@ export const POS_LABELS: Record<string, string> = {
 	Article: 'Articles',
 	Pronoun: 'Pronouns',
 	'Auxiliary Verb': 'Auxiliary Verbs',
-	'Past Tense': 'Past Tense Verbs'
+	'Past Tense': 'Past Tense Verbs',
+	Vocabulary: 'Vocabulary'
 };
 
 export const POS_COLORS: Record<string, string> = {
@@ -74,5 +90,6 @@ export const POS_COLORS: Record<string, string> = {
 	Adverb: 'text-chart-5',
 	Conjunction: 'text-chart-1',
 	Article: 'text-chart-2',
-	Pronoun: 'text-chart-3'
+	Pronoun: 'text-chart-3',
+	Vocabulary: 'text-chart-4'
 };
