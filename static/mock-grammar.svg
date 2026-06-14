@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <rect width="400" height="400" fill="oklch(0.18 0.01 265)" rx="12"/>
+  <rect x="60" y="80" width="280" height="240" fill="oklch(0.235 0.014 265)" rx="8"/>
+  <rect x="80" y="110" width="200" height="8" fill="oklch(0.62 0.14 165)" rx="4"/>
+  <rect x="80" y="140" width="240" height="6" fill="oklch(0.55 0.12 165)" rx="3"/>
+  <rect x="80" y="160" width="180" height="6" fill="oklch(0.35 0.012 265)" rx="3"/>
+  <rect x="80" y="190" width="160" height="8" fill="oklch(0.62 0.14 165)" rx="4"/>
+  <rect x="80" y="220" width="220" height="6" fill="oklch(0.35 0.012 265)" rx="3"/>
+  <rect x="80" y="240" width="140" height="6" fill="oklch(0.35 0.012 265)" rx="3"/>
+  <rect x="80" y="270" width="200" height="8" fill="oklch(0.55 0.12 165)" rx="4"/>
+  <circle cx="330" cy="120" r="24" fill="oklch(0.62 0.14 165)" opacity="0.15"/>
+  <circle cx="330" cy="120" r="12" fill="oklch(0.62 0.14 165)" opacity="0.6"/>
+  <text x="200" y="360" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="oklch(0.65 0.015 260)">Grammar Visualization</text>
+</svg>
