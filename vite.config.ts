@@ -12,7 +12,14 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
 				experimental: { async: true }
 			},
-			experimental: { remoteFunctions: true, handleRenderingErrors: true }
+			experimental: { remoteFunctions: true, handleRenderingErrors: true },
+			vitePlugin: {
+				inspector: {
+					toggleKeyCombo: 'alt-x',
+					showToggleButton: 'always',
+					toggleButtonPos: 'bottom-left'
+				}
+			}
 		})
 	]
 });
