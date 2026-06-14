@@ -47,9 +47,12 @@
 		"@fontsource-variable/merriweather": "^5.2.6",
 		"@fontsource-variable/outfit": "^5.2.8",
 		"@prisma/client": "6.5.0",
+		"animejs": "^4.4.1",
 		"better-auth": "^1.6.18",
 		"compromise": "^14.15.1",
+		"motion-sv": "^0.1.12",
 		"prisma": "6.5.0",
+		"sv-agentation": "^0.4.0",
 		"svelte-idb": "^0.1.6",
 		"valibot": "^1.4.1"
 	}

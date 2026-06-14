@@ -1,42 +1,40 @@
-# sv
+# LexiGap
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+**Algorithmic Grammar Assessment — Master Grammar, One Gap at a Time.**
 
-## Creating a project
+LexiGap generates personalized cloze-test quizzes using deterministic NLP algorithms — no expensive LLMs needed. Take a 20-question assessment, get a detailed grammar profile, and follow a custom learning path tailored to your weak spots.
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-bun x sv@0.16.1 create --template minimal --types ts --add prettier tailwindcss="plugins:typography,forms" experimental="versions:kit+features:async,remoteFunctions,explicitEnvironmentVariables,handleRenderingErrors" sveltekit-adapter="adapter:netlify" --install bun lexigap
-```
+Built with [SvelteKit 5](https://svelte.dev/), [shadcn-svelte](https://shadcn-svelte.com/), [Better Auth](https://better-auth.com/), and [Prisma](https://www.prisma.io/).
 
 ## Developing
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+bun dev
 ```
 
 ## Building
 
-To create a production version of your app:
-
 ```sh
-npm run build
+bun run build
 ```
 
-You can preview the production build with `npm run preview`.
+## Powered By
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+LexiGap stands on the shoulders of these incredible open-source tools and APIs:
+
+| Resource                                               | Purpose                                                                                                                                                         |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[Datamuse API](https://api.datamuse.com/)**          | Word-finding API powering synonym, antonym, association, homophone, and distractor generation, plus pronunciation, syllable count, and word frequency metadata. |
+| **[compromise](https://compromise.cool/)**             | Lightweight NLP library for POS tagging and sentence parsing — runs entirely in the browser with zero dependencies.                                             |
+| **[textlens](https://github.com/nicklasxyz/textlens)** | Readability scoring and text analysis for calibrated difficulty levels.                                                                                         |
+| **[Lucide](https://lucide.dev/)**                      | Beautiful, consistent icons used throughout the UI.                                                                                                             |
+| **[shadcn-svelte](https://shadcn-svelte.com/)**        | Component library built on [Bits UI](https://bits-ui.com/) — the UI foundation.                                                                                 |
+| **[Better Auth](https://better-auth.com/)**            | Authentication and session management.                                                                                                                          |
+
+## Project Setup
+
+This project was scaffolded with:
+
+```sh
+bun x sv@0.16.1 create --template minimal --types ts --add prettier tailwindcss="plugins:typography,forms" experimental="versions:kit+features:async,remoteFunctions,explicitEnvironmentVariables,handleRenderingErrors" sveltekit-adapter="adapter:netlify" --install bun lexigap
+```
