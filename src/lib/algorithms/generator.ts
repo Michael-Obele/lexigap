@@ -256,40 +256,7 @@ async function generateAntonymQuestion(): Promise<GeneratedQuestion | null> {
 	return null;
 }
 
-/** Type 3: "Which word is most closely associated with X?" (trigger) */
-async function generateAssociationQuestion(): Promise<GeneratedQuestion | null> {
-	for (let attempt = 0; attempt < 5; attempt++) {
-		const poolWord = await fetchSeedWord();
-		if (!poolWord) return null;
-		const target = poolWord.word;
-
-		const triggers = await fetchTriggers(target);
-		if (triggers.length < 1) continue;
-
-		const correctWord = triggers[0];
-		const distractors = await fetchDistractors(target, 3);
-		const allDistractors = [...new Set(distractors)].filter(
-			(d) => d.toLowerCase() !== correctWord.toLowerCase()
-		);
-		if (allDistractors.length < 3) continue;
-
-		const options = shuffle([correctWord, ...allDistractors.slice(0, 3)]);
-		const correctIndex = options.findIndex((o) => o === correctWord);
-
-		return enrichQuestion({
-			sentence: `Which word is most closely associated with "${target}"?`,
-			blankWord: target,
-			posTag: 'Vocabulary',
-			options,
-			correctIndex,
-			type: 'association',
-			difficulty: poolWord.difficulty
-		});
-	}
-	return null;
-}
-
-/** Type 4: "Which word has a similar meaning to X?" (means-like) */
+/** Type 3: "Which word has a similar meaning to X?" (means-like) */
 async function generateMeansLikeQuestion(): Promise<GeneratedQuestion | null> {
 	for (let attempt = 0; attempt < 5; attempt++) {
 		const poolWord = await fetchSeedWord();
@@ -316,106 +283,6 @@ async function generateMeansLikeQuestion(): Promise<GeneratedQuestion | null> {
 			options,
 			correctIndex,
 			type: 'means-like',
-			difficulty: poolWord.difficulty
-		});
-	}
-	return null;
-}
-
-/** Type 5: "Which word means the same as [phrase]?" (phrase-to-word mapping) */
-async function generatePhraseQuestion(): Promise<GeneratedQuestion | null> {
-	for (let attempt = 0; attempt < 5; attempt++) {
-		const poolWord = await fetchSeedWord();
-		if (!poolWord) return null;
-		const target = poolWord.word;
-
-		const phrases = await fetchPhraseCandidates(target);
-		if (phrases.length < 4) continue;
-
-		const correctPhrase = phrases[0];
-		const distractors = phrases
-			.slice(1)
-			.filter((phrase) => phrase.toLowerCase() !== correctPhrase.toLowerCase());
-		if (distractors.length < 3) continue;
-
-		const options = shuffle([correctPhrase, ...distractors.slice(0, 3)]);
-		const correctIndex = options.findIndex((o) => o === correctPhrase);
-
-		return enrichQuestion({
-			sentence: `Which phrase is most closely associated with "${target}"?`,
-			blankWord: target,
-			posTag: 'Vocabulary',
-			options,
-			correctIndex,
-			type: 'phrase',
-			difficulty: poolWord.difficulty
-		});
-	}
-
-	return null;
-}
-
-/** Type 6: "Which word sounds like X?" (homophone) */
-async function generateHomophoneQuestion(): Promise<GeneratedQuestion | null> {
-	for (let attempt = 0; attempt < 5; attempt++) {
-		const poolWord = await fetchSeedWord();
-		if (!poolWord) return null;
-		const target = poolWord.word;
-
-		const homophones = await fetchHomophones(target);
-		if (homophones.length < 1) continue;
-
-		const correctWord = homophones[0];
-		const distractors = await fetchDistractors(target, 3);
-		const allDistractors = [...new Set(distractors)].filter(
-			(d) =>
-				d.toLowerCase() !== correctWord.toLowerCase() && d.toLowerCase() !== target.toLowerCase()
-		);
-		if (allDistractors.length < 3) continue;
-
-		const options = shuffle([correctWord, ...allDistractors.slice(0, 3)]);
-		const correctIndex = options.findIndex((o) => o === correctWord);
-
-		return enrichQuestion({
-			sentence: `Which word sounds like "${target}"?`,
-			blankWord: target,
-			posTag: 'Vocabulary',
-			options,
-			correctIndex,
-			type: 'homophone',
-			difficulty: poolWord.difficulty
-		});
-	}
-	return null;
-}
-
-/** Type 7: "Which noun is often described as X?" (adjective→noun via rel_jja) */
-async function generateAdjectiveNounQuestion(): Promise<GeneratedQuestion | null> {
-	for (let attempt = 0; attempt < 5; attempt++) {
-		const poolWord = await fetchSeedWord();
-		if (!poolWord) return null;
-		const adjective = poolWord.word;
-
-		const nouns = await fetchAdjectiveNouns(adjective);
-		if (nouns.length < 1) continue;
-
-		const correctWord = nouns[0];
-		const distractors = await fetchDistractors(correctWord, 3);
-		const allDistractors = [...new Set(distractors)].filter(
-			(d) => d.toLowerCase() !== correctWord.toLowerCase()
-		);
-		if (allDistractors.length < 3) continue;
-
-		const options = shuffle([correctWord, ...allDistractors.slice(0, 3)]);
-		const correctIndex = options.findIndex((o) => o === correctWord);
-
-		return enrichQuestion({
-			sentence: `Which noun is often described as "${adjective}"?`,
-			blankWord: adjective,
-			posTag: 'Vocabulary',
-			options,
-			correctIndex,
-			type: 'adjective-noun',
 			difficulty: poolWord.difficulty
 		});
 	}
@@ -490,30 +357,21 @@ const GENERATORS: Array<{
 	gen: () => Promise<GeneratedQuestion | null>;
 	weight: number;
 }> = [
-	{ gen: generateSynonymQuestion, weight: 0.2 },
-	{ gen: generateAntonymQuestion, weight: 0.1 },
-	{ gen: generateAssociationQuestion, weight: 0.1 },
-	{ gen: generateMeansLikeQuestion, weight: 0.1 },
-	{ gen: generatePhraseQuestion, weight: 0.05 },
-	{ gen: generateHomophoneQuestion, weight: 0.1 },
-	{ gen: generateAdjectiveNounQuestion, weight: 0.1 },
-	{ gen: generateClozeQuestion, weight: 0.25 }
+	{ gen: generateSynonymQuestion, weight: 0.3 },
+	{ gen: generateAntonymQuestion, weight: 0.15 },
+	{ gen: generateMeansLikeQuestion, weight: 0.15 },
+	{ gen: generateClozeQuestion, weight: 0.4 }
 ];
 
 /**
  * Generate a complete quiz of `count` questions (default 20).
  * Every question is fetched live from Datamuse — zero hardcoded quiz content.
- * First ensures the vocabulary pool has enough words.
  *
  * Distribution:
- * - 20% synonym
- * - 10% antonym
- * - 10% association
- * - 10% means-like
- * - 5% phrase
- * - 10% homophone
- * - 10% adjective→noun
- * - 25% cloze/gap-fill
+ * - 30% synonym
+ * - 15% antonym
+ * - 15% means-like
+ * - 40% cloze/gap-fill
  */
 export async function generateQuiz(count: number = 20): Promise<GeneratedQuestion[]> {
 	const questions: GeneratedQuestion[] = [];

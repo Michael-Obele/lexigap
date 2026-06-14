@@ -302,11 +302,7 @@
 		const labels: Record<string, string> = {
 			synonym: 'Vocabulary',
 			antonym: 'Vocabulary',
-			association: 'Vocabulary',
 			'means-like': 'Vocabulary',
-			phrase: 'Vocabulary',
-			homophone: 'Phonetics',
-			'adjective-noun': 'Vocabulary',
 			cloze: 'Grammar'
 		};
 		return labels[type] || 'Vocabulary';
