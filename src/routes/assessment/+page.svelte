@@ -23,15 +23,20 @@
 	import AnswerOption from '$lib/components/app/quiz/AnswerOption.svelte';
 	import ProgressHeader from '$lib/components/app/quiz/ProgressHeader.svelte';
 	import { db } from '$lib/db';
-	import { getQuizQuestion } from '$lib/remote';
+	import { getQuizBatch } from '$lib/remote';
 	import type { GeneratedQuestion } from '$lib/types/quiz';
 	import { calculateMetrics } from '$lib/algorithms/generator';
 
 	const TOTAL_QUESTIONS = 20;
+	const PREFETCH_COUNT = 3;
+	const INITIAL_FETCH = 3;
 
 	let questions = $state<GeneratedQuestion[]>([]);
-	let loadingQuestion = $state(false);
-	let questionError = $state<string | null>(null);
+	let loadingQuiz = $state(true);
+	let quizError = $state<string | null>(null);
+	let prefetching = $state(false);
+	let prefetchQueued = false;
+	let usedWords = $state<string[]>([]);
 	let totalQuestions = $derived(TOTAL_QUESTIONS);
 	let currentQuestion = $state(0);
 	let selectedAnswer = $state<number | null>(null);
@@ -64,13 +69,12 @@
 	let timeRemaining = $state(TOTAL_TIME);
 	let timerExpired = $state(false);
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
-	let generationToastId: string | number | null = null;
 
 	function startTimer() {
-		if (timerInterval || result || timerExpired || loadingQuestion) return;
+		if (timerInterval || result || timerExpired || loadingQuiz) return;
 
 		timerInterval = setInterval(() => {
-			if (result || timerExpired || loadingQuestion) return;
+			if (result || timerExpired || loadingQuiz) return;
 
 			timeRemaining = Math.max(0, timeRemaining - 1);
 
@@ -88,29 +92,87 @@
 		timerInterval = null;
 	}
 
-	function pauseTimer() {
-		stopTimer();
-	}
-
-	function resumeTimer() {
-		if (result || timerExpired || loadingQuestion) return;
-		startTimer();
-	}
-
-	async function syncQuestionBuffer() {
-		if (result || timerExpired) return;
-		await ensureQuestion(currentQuestion, { showToast: !currentQ });
-		await ensureQuestion(currentQuestion + 1);
-	}
-
 	onMount(() => {
-		startTimer();
-		void syncQuestionBuffer();
+		console.log('[QuizPage] Mount — starting initial prefetch:', INITIAL_FETCH);
+		void prefetchQuestions(INITIAL_FETCH);
 
 		return () => {
 			stopTimer();
 		};
 	});
+
+	function maybePrefetch() {
+		if (prefetchQueued || prefetching || result || timerExpired) return;
+		if (questions.length >= TOTAL_QUESTIONS) return;
+
+		const remainingAhead = questions.length - currentQuestion;
+		if (remainingAhead > PREFETCH_COUNT) return;
+
+		console.log('[QuizPage] maybePrefetch: buffer low', {
+			currentQuestion,
+			questionsLoaded: questions.length,
+			remainingAhead
+		});
+
+		prefetchQueued = true;
+		queueMicrotask(() => {
+			prefetchQueued = false;
+			void prefetchQuestions(PREFETCH_COUNT);
+		});
+	}
+
+	/**
+	 * Fetch a small batch of quiz questions without blocking the UI.
+	 * Keeps a short buffer ahead of the current question instead of loading all 20 up front.
+	 */
+	async function prefetchQuestions(count: number) {
+		if (prefetching || questions.length >= TOTAL_QUESTIONS || result || timerExpired) return;
+		console.log('[QuizPage] prefetchQuestions START:', {
+			count,
+			questionsLoaded: questions.length,
+			currentQuestion
+		});
+
+		prefetching = true;
+		const batchSize = Math.min(count, TOTAL_QUESTIONS - questions.length);
+		let shouldPrefetchNextBatch = false;
+
+		try {
+			const nextQuestions = await getQuizBatch({ count: batchSize, usedWords });
+
+			console.log('[QuizPage] prefetchQuestions DONE:', {
+				received: nextQuestions.length,
+				words: nextQuestions.map((q) => q.blankWord)
+			});
+
+			if (nextQuestions.length > 0) {
+				questions = [...questions, ...nextQuestions];
+				usedWords = [...usedWords, ...nextQuestions.map((question) => question.blankWord)];
+				quizError = null;
+				if (loadingQuiz) {
+					loadingQuiz = false;
+				}
+				if (!timerInterval) {
+					startTimer();
+				}
+				shouldPrefetchNextBatch = true;
+			} else if (questions.length === 0) {
+				quizError = 'Datamuse could not produce any quiz questions';
+				loadingQuiz = false;
+			}
+		} catch (caughtError) {
+			console.error('[QuizPage] prefetchQuestions ERROR:', caughtError);
+			if (questions.length === 0) {
+				quizError = caughtError instanceof Error ? caughtError.message : 'Unable to load quiz';
+				loadingQuiz = false;
+			}
+		} finally {
+			prefetching = false;
+			if (shouldPrefetchNextBatch) {
+				maybePrefetch();
+			}
+		}
+	}
 
 	function formatTime(seconds: number): string {
 		const m = Math.floor(seconds / 60);
@@ -123,52 +185,6 @@
 	);
 
 	const timerProgress = $derived(Math.round((timeRemaining / TOTAL_TIME) * 100));
-
-	async function ensureQuestion(
-		index: number,
-		options: { showToast?: boolean; retryLabel?: string } = {}
-	) {
-		if (index >= TOTAL_QUESTIONS) return;
-		if (questions[index] || loadingQuestion) return;
-
-		pauseTimer();
-		loadingQuestion = true;
-		questionError = null;
-
-		if (options.showToast) {
-			generationToastId = toast.loading(options.retryLabel ?? 'Generating your next question...');
-		}
-
-		try {
-			const nextQuestion = await getQuizQuestion({
-				usedWords: questions.map((question) => question.blankWord)
-			});
-
-			if (!questions.some((question) => question.blankWord === nextQuestion.blankWord)) {
-				questions = [...questions, nextQuestion];
-			}
-		} catch (caughtError) {
-			questionError =
-				caughtError instanceof Error ? caughtError.message : 'Unable to load question';
-			if (options.showToast) {
-				toast.error('Question generation failed. Please try again.');
-			}
-		} finally {
-			loadingQuestion = false;
-			if (generationToastId !== null) {
-				toast.dismiss(generationToastId);
-				generationToastId = null;
-			}
-			resumeTimer();
-		}
-	}
-
-	async function retryQuestion() {
-		await ensureQuestion(currentQuestion, {
-			showToast: true,
-			retryLabel: 'Retrying question generation...'
-		});
-	}
 
 	function selectAnswer(index: number) {
 		if (answered || result || !currentQ) return;
@@ -239,7 +255,7 @@
 			currentQuestion++;
 			selectedAnswer = null;
 			answered = false;
-			void syncQuestionBuffer();
+			maybePrefetch();
 		}
 	}
 
@@ -248,7 +264,6 @@
 			currentQuestion--;
 			selectedAnswer = userAnswers[currentQuestion] ?? null;
 			answered = selectedAnswer !== null;
-			void syncQuestionBuffer();
 		}
 	}
 
@@ -257,7 +272,7 @@
 			currentQuestion++;
 			selectedAnswer = null;
 			answered = false;
-			void syncQuestionBuffer();
+			maybePrefetch();
 		}
 	}
 
@@ -342,19 +357,8 @@
 			{/if}
 		</div>
 		<div class="flex items-center gap-2">
-			<Badge
-				variant="outline"
-				class="gap-1.5 rounded-full px-3 py-1.5 font-mono {loadingQuestion
-					? 'border-warning/30 text-warning'
-					: timerColor}"
-				title={loadingQuestion ? 'Timer paused while generating the next question' : undefined}
-			>
-				{#if loadingQuestion}
-					<LoaderCircle class="size-3.5 animate-spin" />
-					Paused
-				{:else}
-					<AlarmClock class="size-3.5" />
-				{/if}
+			<Badge variant="outline" class="gap-1.5 rounded-full px-3 py-1.5 font-mono {timerColor}">
+				<AlarmClock class="size-3.5" />
 				<span class="font-semibold">{formatTime(timeRemaining)}</span>
 			</Badge>
 			<a href="/">
@@ -427,7 +431,27 @@
 				<ProgressHeader currentQuestion={currentQuestion + 1} {totalQuestions} />
 
 				<Card.Root class="rounded-xl border border-border/50 p-6 md:p-8">
-					{#if currentQ}
+					{#if loadingQuiz}
+						<div class="space-y-4 py-8 text-center">
+							<div class="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
+								<LoaderCircle class="size-5 animate-spin text-muted-foreground" />
+							</div>
+							<p class="text-lg font-medium text-foreground">Generating your assessment...</p>
+							<p class="text-sm text-muted-foreground">
+								Questions are being prepared in the background using live vocabulary data.
+							</p>
+						</div>
+					{:else if quizError}
+						<div class="space-y-4 py-8 text-center">
+							<div
+								class="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10"
+							>
+								<Info class="size-5 text-destructive" />
+							</div>
+							<p class="text-lg font-medium text-foreground">Failed to load quiz</p>
+							<p class="text-sm text-warning">{quizError}</p>
+						</div>
+					{:else if currentQ}
 						<div class="mb-4 flex flex-wrap items-center gap-2">
 							<Badge variant="secondary" class="text-xs">
 								{getQuestionTypeLabel(currentQ.type)}
@@ -523,30 +547,12 @@
 					{:else}
 						<div class="space-y-4 py-8 text-center">
 							<div class="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-								{#if loadingQuestion}
-									<LoaderCircle class="size-5 animate-spin text-muted-foreground" />
-								{:else}
-									<Info class="size-5 text-muted-foreground animate-pulse" />
-								{/if}
+								<LoaderCircle class="size-5 animate-spin text-muted-foreground" />
 							</div>
-							<p class="text-lg font-medium text-foreground">
-								{loadingQuestion ? 'Generating your next question...' : 'Question not ready yet'}
-							</p>
+							<p class="text-lg font-medium text-foreground">Loading the next question...</p>
 							<p class="text-sm text-muted-foreground">
-								Datamuse is being queried in the background. The quiz will continue as soon as the
-								next question is ready.
+								The next batch is being prepared in the background.
 							</p>
-							{#if questionError}
-								<p class="text-sm text-warning">{questionError}</p>
-							{/if}
-							<Button variant="outline" onclick={retryQuestion} disabled={loadingQuestion}>
-								{#if loadingQuestion}
-									<LoaderCircle class="mr-1 size-4 animate-spin" />
-									Retrying...
-								{:else}
-									Retry
-								{/if}
-							</Button>
 						</div>
 					{/if}
 				</Card.Root>

@@ -196,11 +196,13 @@ async function generateSynonymQuestion(): Promise<GeneratedQuestion | null> {
 		if (!poolWord) return null;
 		const target = poolWord.word;
 
+		// Seed quality filter: skip if target has no synonyms (avoids wasted API calls)
 		const synonyms = await fetchSynonyms(target);
-		if (synonyms.length < 2) continue;
+		if (synonyms.length < 1) continue;
 
 		const correctWord = synonyms[0];
-		const distractors = await fetchDistractors(target, 3);
+		// Request 4 distractors so filtering out correctWord + target still leaves ≥3
+		const distractors = await fetchDistractors(target, 4);
 		const allDistractors = [...new Set(distractors)].filter(
 			(d) =>
 				d.toLowerCase() !== correctWord.toLowerCase() && d.toLowerCase() !== target.toLowerCase()
@@ -209,6 +211,8 @@ async function generateSynonymQuestion(): Promise<GeneratedQuestion | null> {
 
 		const options = shuffle([correctWord, ...allDistractors.slice(0, 3)]);
 		const correctIndex = options.findIndex((o) => o === correctWord);
+
+		console.log('[Generator] Synonym:', { target, correctWord, options });
 
 		return enrichQuestion({
 			sentence: `Which word is closest in meaning to "${target}"?`,
@@ -220,6 +224,7 @@ async function generateSynonymQuestion(): Promise<GeneratedQuestion | null> {
 			difficulty: poolWord.difficulty
 		});
 	}
+	console.log('[Generator] Synonym FAILED after 5 attempts');
 	return null;
 }
 
@@ -242,6 +247,8 @@ async function generateAntonymQuestion(): Promise<GeneratedQuestion | null> {
 
 		const options = shuffle([correctWord, ...allDistractors.slice(0, 3)]);
 		const correctIndex = options.findIndex((o) => o === correctWord);
+
+		console.log('[Generator] Antonym:', { target, correctWord, options });
 
 		return enrichQuestion({
 			sentence: `Which word is the opposite of "${target}"?`,
@@ -267,7 +274,8 @@ async function generateMeansLikeQuestion(): Promise<GeneratedQuestion | null> {
 		if (similar.length < 1) continue;
 
 		const correctWord = similar[0];
-		const distractors = await fetchDistractors(target, 3);
+		// Request 4 distractors so filtering out correctWord still leaves ≥3
+		const distractors = await fetchDistractors(target, 4);
 		const allDistractors = [...new Set(distractors)].filter(
 			(d) => d.toLowerCase() !== correctWord.toLowerCase()
 		);
@@ -275,6 +283,8 @@ async function generateMeansLikeQuestion(): Promise<GeneratedQuestion | null> {
 
 		const options = shuffle([correctWord, ...allDistractors.slice(0, 3)]);
 		const correctIndex = options.findIndex((o) => o === correctWord);
+
+		console.log('[Generator] Means-like:', { target, correctWord, options });
 
 		return enrichQuestion({
 			sentence: `Which word has a similar meaning to "${target}"?`,
@@ -286,6 +296,7 @@ async function generateMeansLikeQuestion(): Promise<GeneratedQuestion | null> {
 			difficulty: poolWord.difficulty
 		});
 	}
+	console.log('[Generator] Means-like FAILED after 5 attempts');
 	return null;
 }
 
@@ -327,6 +338,8 @@ async function generateClozeQuestion(): Promise<GeneratedQuestion | null> {
 		const options = shuffle([correctWord, ...allDistractors.slice(0, 3)]);
 		const correctIndex = options.findIndex((o) => o === correctWord);
 
+		console.log('[Generator] Cloze:', { target, phrase, correctWord, options });
+
 		return enrichQuestion({
 			sentence: `Which word completes the phrase: "${blankedPhrase}"?`,
 			blankWord: correctWord,
@@ -337,6 +350,7 @@ async function generateClozeQuestion(): Promise<GeneratedQuestion | null> {
 			difficulty: poolWord.difficulty
 		});
 	}
+	console.log('[Generator] Cloze FAILED after 10 attempts');
 	return null;
 }
 
@@ -357,10 +371,10 @@ const GENERATORS: Array<{
 	gen: () => Promise<GeneratedQuestion | null>;
 	weight: number;
 }> = [
-	{ gen: generateSynonymQuestion, weight: 0.3 },
-	{ gen: generateAntonymQuestion, weight: 0.15 },
-	{ gen: generateMeansLikeQuestion, weight: 0.15 },
-	{ gen: generateClozeQuestion, weight: 0.4 }
+	{ gen: generateSynonymQuestion, weight: 0.15 },
+	{ gen: generateAntonymQuestion, weight: 0.25 },
+	{ gen: generateMeansLikeQuestion, weight: 0.35 },
+	{ gen: generateClozeQuestion, weight: 0.25 }
 ];
 
 /**
@@ -368,12 +382,13 @@ const GENERATORS: Array<{
  * Every question is fetched live from Datamuse — zero hardcoded quiz content.
  *
  * Distribution:
- * - 30% synonym
- * - 15% antonym
- * - 15% means-like
- * - 40% cloze/gap-fill
+ * - 15% synonym
+ * - 25% antonym
+ * - 35% means-like
+ * - 25% cloze/gap-fill
  */
 export async function generateQuiz(count: number = 20): Promise<GeneratedQuestion[]> {
+	console.log('[Generator] generateQuiz START:', { count });
 	const questions: GeneratedQuestion[] = [];
 	const usedKeys = new Set<string>();
 
@@ -389,6 +404,10 @@ export async function generateQuiz(count: number = 20): Promise<GeneratedQuestio
 				if (!usedKeys.has(key)) {
 					usedKeys.add(key);
 					questions.push(q);
+					console.log('[Generator] generateQuiz ADDED (phase 1):', {
+						type: q.type,
+						blankWord: q.blankWord
+					});
 				}
 			}
 		}
@@ -404,11 +423,16 @@ export async function generateQuiz(count: number = 20): Promise<GeneratedQuestio
 			if (!usedKeys.has(key)) {
 				usedKeys.add(key);
 				questions.push(q);
+				console.log('[Generator] generateQuiz ADDED (fill phase):', {
+					type: q.type,
+					blankWord: q.blankWord
+				});
 			}
 		}
 		if (questions.length === count) break;
 	}
 
+	console.log('[Generator] generateQuiz END:', { requested: count, produced: questions.length });
 	return questions.slice(0, count);
 }
 
