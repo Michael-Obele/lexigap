@@ -250,11 +250,13 @@
 									<p class="text-5xl font-bold text-primary">{overallScore}%</p>
 									<div class="mt-2 flex items-center gap-2">
 										<Badge variant="outline" class={statusColor}>
-											{statusLabel === 'Strong'
-												? TrendingUp
-												: statusLabel === 'Developing'
-													? ArrowRight
-													: TrendingDown}
+										{#if statusLabel === 'Strong'}
+											<TrendingUp class="size-3" />
+										{:else if statusLabel === 'Developing'}
+											<ArrowRight class="size-3" />
+										{:else}
+											<TrendingDown class="size-3" />
+										{/if}
 											{statusLabel}
 										</Badge>
 									</div>
