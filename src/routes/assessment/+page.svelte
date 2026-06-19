@@ -420,9 +420,6 @@
 						<a href="/dashboard">
 							<Button class="w-full">View Dashboard</Button>
 						</a>
-						<a href="/learning-path">
-							<Button variant="outline" class="w-full">View Learning Path</Button>
-						</a>
 					</div>
 				</Card.Root>
 			</div>

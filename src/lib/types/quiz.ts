@@ -2,6 +2,9 @@
  * Types for the quiz generation system
  */
 
+/** Frequency band (1=most common, 5=rarest) */
+export type FrequencyBand = 1 | 2 | 3 | 4 | 5;
+
 export type QuestionType =
 	| 'synonym'
 	| 'antonym'
@@ -10,7 +13,8 @@ export type QuestionType =
 	| 'phrase'
 	| 'cloze'
 	| 'homophone'
-	| 'adjective-noun';
+	| 'adjective-noun'
+	| 'collocation';
 
 export interface GeneratedQuestion {
 	sentence: string;
@@ -20,6 +24,8 @@ export interface GeneratedQuestion {
 	correctIndex: number;
 	type: QuestionType;
 	difficulty: string;
+	/** Frequency band (1=most common, 5=rarest) */
+	band: FrequencyBand;
 	/** Optional metadata enriched from Datamuse */
 	definition?: string;
 	pronunciation?: string;
@@ -79,7 +85,8 @@ export const POS_LABELS: Record<string, string> = {
 	Pronoun: 'Pronouns',
 	'Auxiliary Verb': 'Auxiliary Verbs',
 	'Past Tense': 'Past Tense Verbs',
-	Vocabulary: 'Vocabulary'
+	Vocabulary: 'Vocabulary',
+	Collocation: 'Collocations'
 };
 
 export const POS_COLORS: Record<string, string> = {
@@ -91,5 +98,6 @@ export const POS_COLORS: Record<string, string> = {
 	Conjunction: 'text-chart-1',
 	Article: 'text-chart-2',
 	Pronoun: 'text-chart-3',
-	Vocabulary: 'text-chart-4'
+	Vocabulary: 'text-chart-4',
+	Collocation: 'text-chart-5'
 };

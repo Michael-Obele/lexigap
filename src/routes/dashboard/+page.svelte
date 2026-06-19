@@ -250,13 +250,13 @@
 									<p class="text-5xl font-bold text-primary">{overallScore}%</p>
 									<div class="mt-2 flex items-center gap-2">
 										<Badge variant="outline" class={statusColor}>
-										{#if statusLabel === 'Strong'}
-											<TrendingUp class="size-3" />
-										{:else if statusLabel === 'Developing'}
-											<ArrowRight class="size-3" />
-										{:else}
-											<TrendingDown class="size-3" />
-										{/if}
+											{#if statusLabel === 'Strong'}
+												<TrendingUp class="size-3" />
+											{:else if statusLabel === 'Developing'}
+												<ArrowRight class="size-3" />
+											{:else}
+												<TrendingDown class="size-3" />
+											{/if}
 											{statusLabel}
 										</Badge>
 									</div>
@@ -374,12 +374,6 @@
 								<Button variant="default">
 									<Play class="mr-1 size-4" />
 									{overallScore !== null ? 'New Assessment' : 'Start Assessment'}
-								</Button>
-							</a>
-							<a href="/learning-path">
-								<Button variant="outline">
-									<Route class="mr-1 size-4" />
-									View Learning Path
 								</Button>
 							</a>
 							<!-- Dead links → show toast -->

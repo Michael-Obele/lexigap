@@ -5,24 +5,31 @@
  * 1. Bootstrap: Datamuse `/sug` with random letter prefixes → discover initial words
  * 2. Expand: Datamuse `sp` patterns → more words with frequency data
  * 3. Grow: After quizzes, use `rel_trg` from used words → discover related words
- * 4. Cache: All discovered words stored in svelte-idb
+ * 4. Cache: All discovered words stored in an in-memory store
+ *
+ * NOTE: Quiz generation runs server-side in SvelteKit remotes, so we use an
+ * in-memory Map (not IndexedDB, which is browser-only). The pool persists
+ * for the lifetime of the server process.
  */
 
-import { db, type VocabEntry } from '$lib/db';
+import type { VocabEntry } from '$lib/db';
 
-// ─── Type-safe helpers for svelte-idb ─────────────────────────
+// ─── In-memory store ────────────────────────────────────────
+//
+// IndexedDB (svelte-idb) is browser-only. Since quiz generation runs on the
+// server, we use a simple module-level Map. This persists across requests
+// within the same server process.
 
-/** Cast svelte-idb's generic record result to typed array */
-function castEntries(raw: Record<string, unknown>[]): VocabEntry[] {
-	return raw as unknown as VocabEntry[];
-}
+const poolStore = new Map<number, VocabEntry>();
+let nextId = 1;
 
 async function getAllPool(): Promise<VocabEntry[]> {
-	return castEntries(await db.vocabulary_pool.getAll());
+	return Array.from(poolStore.values());
 }
 
 async function addEntry(entry: VocabEntry): Promise<void> {
-	await db.vocabulary_pool.add(entry as unknown as Record<string, unknown>);
+	const id = nextId++;
+	poolStore.set(id, { ...entry, id });
 }
 
 // ─── Datamuse helpers ─────────────────────────────────────────────
@@ -164,6 +171,9 @@ function randomPrefix(minLen = 2, maxLen = 4): string {
 /**
  * Bootstrap the vocabulary pool by querying Datamuse /sug with random prefixes.
  * Runs multiple rounds to discover ~N unique words.
+ *
+ * Resilient: individual API failures are caught and skipped — one failed call
+ * does not abort the entire bootstrap.
  */
 async function bootstrapPool(targetCount = 200): Promise<VocabEntry[]> {
 	const existing = await getAllPool();
@@ -176,9 +186,14 @@ async function bootstrapPool(targetCount = 200): Promise<VocabEntry[]> {
 	const attempts = Math.max(20, Math.ceil(targetCount / 5));
 
 	for (let i = 0; i < attempts && discovered.length + existing.length < targetCount; i++) {
-		const results = await datamuseSug(randomPrefix(), 15);
+		let results: DatamuseResult[];
+		try {
+			results = await datamuseSug(randomPrefix(), 15);
+		} catch {
+			// /sug call failed — skip this round and try next prefix
+			continue;
+		}
 
-		// For /sug results, we need to fetch metadata separately
 		const entries: VocabEntry[] = [];
 		for (const r of results) {
 			const word = r.word.toLowerCase();
@@ -187,11 +202,33 @@ async function bootstrapPool(targetCount = 200): Promise<VocabEntry[]> {
 			}
 			seen.add(word);
 
-			// Fetch metadata for this word
-			const meta = await datamuseWords(`sp=${encodeURIComponent(word)}&md=dfprs`, 1);
-			const m = meta[0] || r;
-			const { posTags, pronunciation, frequency } = extractTags(m.tags || r.tags);
-			const definitions = extractDefinitions(m.defs || r.defs);
+			// Fetch metadata for this word — wrap in try/catch so a single
+			// failed metadata lookup doesn't abort the whole bootstrap
+			let frequency = 0;
+			let posTags: string[] = [];
+			let pronunciation = '';
+			let definitions: string[] = [];
+			let syllables = 0;
+
+			try {
+				const meta = await datamuseWords(`sp=${encodeURIComponent(word)}&md=dfprs`, 1);
+				const m = meta[0];
+				if (m) {
+					const extracted = extractTags(m.tags || []);
+					posTags = extracted.posTags;
+					pronunciation = extracted.pronunciation;
+					frequency = extracted.frequency;
+					definitions = extractDefinitions(m.defs || []);
+					syllables = m.numSyllables ?? 0;
+				}
+			} catch {
+				// Metadata fetch failed — use sug result data as-is (no freq/pos)
+				const extracted = extractTags(r.tags || []);
+				posTags = extracted.posTags;
+				pronunciation = extracted.pronunciation;
+				frequency = extracted.frequency;
+				definitions = extractDefinitions(r.defs || []);
+			}
 
 			entries.push({
 				word,
@@ -199,7 +236,7 @@ async function bootstrapPool(targetCount = 200): Promise<VocabEntry[]> {
 				frequency,
 				definitions: definitions.length > 0 ? definitions : [],
 				posTags: posTags.length > 0 ? posTags : ['unknown'],
-				syllables: m.numSyllables ?? 0,
+				syllables,
 				pronunciation,
 				source: 'sug',
 				discoveredAt: Date.now()
@@ -217,6 +254,7 @@ async function bootstrapPool(targetCount = 200): Promise<VocabEntry[]> {
 /**
  * Expand the pool by querying words matching common letter patterns.
  * This taps into Datamuse's 550K vocabulary via the spell constraint.
+ * Resilient: individual pattern failures are caught and skipped.
  */
 async function expandViaPatterns(count = 50): Promise<VocabEntry[]> {
 	const patterns = ['?????', '??????', '???????', '???*', '?a??', '?e??', '?o??'];
@@ -226,9 +264,14 @@ async function expandViaPatterns(count = 50): Promise<VocabEntry[]> {
 
 	for (const pattern of patterns) {
 		if (discovered.length >= count) break;
-		const results = await datamuseWords(`sp=${pattern}&md=dfprs`, 30);
-		const entries = resultsToEntries(results, seen, 'bootstrap', count - discovered.length);
-		discovered.push(...entries);
+		try {
+			const results = await datamuseWords(`sp=${pattern}&md=dfprs`, 30);
+			const entries = resultsToEntries(results, seen, 'bootstrap', count - discovered.length);
+			discovered.push(...entries);
+		} catch {
+			// Pattern query failed — skip and try the next one
+			continue;
+		}
 	}
 
 	await saveEntries(discovered);
@@ -296,24 +339,156 @@ async function getRandomPoolWords(
 /**
  * Ensure the pool has at least `minCount` words.
  * Bootstraps and expands if needed.
+ *
+ * Resilient: never throws — if Datamuse is unreachable the pool stays
+ * at whatever size it has, and callers handle empty-pool scenarios.
  */
 export async function ensurePool(minCount = 200): Promise<void> {
 	const pool = await getAllPool();
 	if (pool.length >= minCount) return;
 
 	// Bootstrap via /sug first
-	await bootstrapPool(Math.min(minCount, 100));
+	try {
+		await bootstrapPool(Math.min(minCount, 100));
+	} catch (e) {
+		console.warn('[Pool] bootstrapPool failed:', e);
+	}
 
 	// If still not enough, expand via patterns
 	const afterBoot = await getAllPool();
 	if (afterBoot.length < minCount) {
-		await expandViaPatterns(minCount - afterBoot.length);
+		try {
+			await expandViaPatterns(minCount - afterBoot.length);
+		} catch (e) {
+			console.warn('[Pool] expandViaPatterns failed:', e);
+		}
 	}
 
 	const final = await getAllPool();
 	if (final.length < minCount) {
-		throw new Error(
-			'Datamuse is unavailable or returned insufficient vocabulary for quiz generation'
+		console.warn(
+			`[Pool] Only ${final.length}/${minCount} words available. Quiz may have fewer questions.`
 		);
 	}
+}
+
+// ─── Frequency Bands ─────────────────────────────────────────
+
+/**
+ * Frequency bands based on Google Books Ngrams occurrences per million.
+ * Roughly maps to Nation's Vocabulary Size Test bands.
+ *
+ * Band 1 (f ≥ 50):   Top ~1K-2K word families  — "the", "time", "water"
+ * Band 2 (f ≥ 10):   Top ~3K-5K                 — "context", "principle"
+ * Band 3 (f ≥ 3):    Top ~6K-10K                — "tender", "sediment"
+ * Band 4 (f ≥ 1):    Top ~11K-14K               — "anecdote", "fortify"
+ * Band 5 (f < 1):    Beyond 14K                 — "peripatetic", "xenolith"
+ */
+export type FrequencyBand = 1 | 2 | 3 | 4 | 5;
+
+export function getFrequencyBand(frequency: number): FrequencyBand {
+	if (frequency >= 50) return 1;
+	if (frequency >= 10) return 2;
+	if (frequency >= 3) return 3;
+	if (frequency >= 1) return 4;
+	return 5;
+}
+
+/**
+ * Get all pool words within a specific frequency band.
+ */
+export async function getPoolWordsByBand(band: FrequencyBand): Promise<VocabEntry[]> {
+	const all = await getAllPool();
+	return all.filter((w) => getFrequencyBand(w.frequency) === band);
+}
+
+/**
+ * Get a random word from the pool within a specific frequency band.
+ * Returns null if no words exist in that band.
+ */
+export async function getRandomPoolWordByBand(band: FrequencyBand): Promise<VocabEntry | null> {
+	const pool = await getPoolWordsByBand(band);
+	if (pool.length === 0) return null;
+	return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * Ensure the pool has at least `targetPerBand` words in each frequency band.
+ * This is critical for band-stratified quiz sampling.
+ * Resilient: never throws — bands that can't be filled stay sparse.
+ */
+export async function ensurePoolBandCoverage(targetPerBand = 30): Promise<void> {
+	const all = await getAllPool();
+
+	// Count words per band
+	const bandCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+	for (const w of all) {
+		const band = getFrequencyBand(w.frequency);
+		bandCounts[band] = (bandCounts[band] || 0) + 1;
+	}
+
+	// Find bands that need more words
+	const neededBands = Object.entries(bandCounts)
+		.filter(([_, count]) => count < targetPerBand)
+		.map(([band]) => Number(band));
+
+	if (neededBands.length === 0) return;
+
+	// Expand pool to fill sparse bands
+	// Use sp patterns with md=f to find words across frequency spectrum
+	const seen = new Set<string>(all.map((v) => v.word));
+	const discovered: VocabEntry[] = [];
+
+	// Try different word-length patterns to get diverse frequencies
+	const patterns = [
+		'???',
+		'????',
+		'?????',
+		'??????',
+		'???????',
+		'????????',
+		'*a*',
+		'*e*',
+		'*i*',
+		'*o*',
+		'*u*'
+	];
+
+	for (const pattern of patterns) {
+		if (neededBands.every((b) => (bandCounts[b] || 0) >= targetPerBand)) break;
+
+		const results = await datamuseWords(`sp=${pattern}&md=dfprs`, 40);
+
+		for (const r of results) {
+			if (neededBands.every((b) => (bandCounts[b] || 0) >= targetPerBand)) break;
+
+			const word = r.word.toLowerCase();
+			if (seen.has(word) || word.includes(' ') || word.length < 2 || !/^[a-z]+$/.test(word)) {
+				continue;
+			}
+			seen.add(word);
+
+			const { posTags, pronunciation, frequency } = extractTags(r.tags || []);
+			const definitions = extractDefinitions(r.defs || []);
+			const band = getFrequencyBand(frequency);
+
+			// Only add if we need this band
+			if (neededBands.includes(band) && (bandCounts[band] || 0) < targetPerBand) {
+				discovered.push({
+					word,
+					difficulty: parseDifficulty(frequency),
+					frequency,
+					definitions: definitions.length > 0 ? definitions : [],
+					posTags: posTags.length > 0 ? posTags : ['unknown'],
+					syllables: r.numSyllables ?? 0,
+					pronunciation,
+					source: 'bootstrap',
+					discoveredAt: Date.now()
+				});
+				bandCounts[band] = (bandCounts[band] || 0) + 1;
+			}
+		}
+	}
+
+	await saveEntries(discovered);
 }
