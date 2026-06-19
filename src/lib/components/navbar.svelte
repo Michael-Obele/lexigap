@@ -2,8 +2,6 @@
 	import { page } from '$app/state';
 	import BookOpenIcon from '@lucide/svelte/icons/book-open';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
-	import RouteIcon from '@lucide/svelte/icons/route';
-	import GraduationCapIcon from '@lucide/svelte/icons/graduation-cap';
 	import BrainCircuitIcon from '@lucide/svelte/icons/brain-circuit';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import LogInIcon from '@lucide/svelte/icons/log-in';
@@ -20,8 +18,6 @@
 	const appLinks = [
 		{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
 		{ href: '/assessment', label: 'Assessment', icon: BrainCircuitIcon },
-		{ href: '/learning-path', label: 'Learning Path', icon: RouteIcon },
-		{ href: '/lesson', label: 'Lessons', icon: GraduationCapIcon },
 		{ href: '/settings', label: 'Settings', icon: SettingsIcon }
 	];
 

@@ -1,14 +1,6 @@
 <script lang="ts">
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import {
-		BookOpen,
-		LayoutDashboard,
-		BrainCircuit,
-		Route,
-		GraduationCap,
-		Settings,
-		Flame
-	} from '@lucide/svelte';
+	import { BookOpen, LayoutDashboard, BrainCircuit, Settings, Flame } from '@lucide/svelte';
 
 	let { children }: { children: import('svelte').Snippet } = $props();
 
@@ -45,18 +37,6 @@
 							<Sidebar.MenuButton onclick={() => navigate('/assessment')}>
 								<BrainCircuit class="size-4" />
 								Assessment
-							</Sidebar.MenuButton>
-						</Sidebar.MenuItem>
-						<Sidebar.MenuItem>
-							<Sidebar.MenuButton onclick={() => navigate('/learning-path')}>
-								<Route class="size-4" />
-								Learning Path
-							</Sidebar.MenuButton>
-						</Sidebar.MenuItem>
-						<Sidebar.MenuItem>
-							<Sidebar.MenuButton onclick={() => navigate('/lesson')}>
-								<GraduationCap class="size-4" />
-								Lessons
 							</Sidebar.MenuButton>
 						</Sidebar.MenuItem>
 					</Sidebar.Menu>
